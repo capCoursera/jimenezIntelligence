@@ -247,7 +247,7 @@ class PartidoACB(object):
                     # self.Equipos[estado]['estads']=estads
                     if estads['P'] != self.Equipos[estado]['Puntos']:
                         print(estads, self.Equipos[estado])
-                        raise BaseException("ProcesaLineaTablaEstadistica: TOTAL '%s' puntos '%i' "
+                        print("Exception: ProcesaLineaTablaEstadistica: TOTAL '%s' puntos '%i' "
                                             "no casan con encabezado '%i' " % (estado, estads['P'],
                                                                                self.Equipos[estado]['Puntos']))
                 else:
