@@ -142,6 +142,7 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
     solBusq = ", ".join(["%s: %s" % (k, str(val2match[k])) for k in SEQCLAVES])
     numCombs = prod([g['numCombs'] for g in grupos2check])
     tamCubo = prod([len(g['valSets']) for g in grupos2check])
+    contExcl['cuboIni'] = tamCubo
     FORMATOIN = "%-16s P:%3d J:%2d %20s IN  numEqs %16d cubo inicial: %10d Valores a buscar: %s"
     logger.info(FORMATOIN % (equipo, seqnum, jornada, combInt, numCombs, tamCubo, solBusq))
     timeIn = time()
