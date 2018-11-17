@@ -130,7 +130,7 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
                 regSol = (equipo, solClaves, prod([x for x in nuevosCombVals]))
                 result.append(regSol)
                 # TODO: logging
-                logger.info("%-16s J:%2d Sol: %s", equipo, jornada, regSol)
+                logger.info("%-16s J:%2d P:%3d Sol: %s", equipo, jornada, seqnum, regSol)
                 continue
             else:
                 deeperSol = curSol + [prodKey]
@@ -142,7 +142,7 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
     solBusq = ", ".join(["%s: %s" % (k, str(val2match[k])) for k in SEQCLAVES])
     numCombs = prod([g['numCombs'] for g in grupos2check])
     tamCubo = prod([len(g['valSets']) for g in grupos2check])
-    FORMATOIN = "%-16s %3d J:%2d %20s IN  numEqs %16d cubo inicial: %10d Valores a buscar: %s"
+    FORMATOIN = "%-16s P:%3d J:%2d %20s IN  numEqs %16d cubo inicial: %10d Valores a buscar: %s"
     logger.info(FORMATOIN % (equipo, seqnum, jornada, combInt, numCombs, tamCubo, solBusq))
     timeIn = time()
     ValidaCombinacion(combVals, claves, val2match, [], equipo, combInt)
@@ -151,7 +151,7 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
 
     numEqs = sum([eq[-1] for eq in result])
     ops = contExcl['cubos']
-    FORMATOOUT = "%-16s %3d J:%2d %20s OUT %3d %3d %10.3fs %10.8f%% %16d -> %12d %s"
+    FORMATOOUT = "%-16s P:%3d J:%2d %20s OUT %3d %3d %10.3fs %10.8f%% %16d -> %12d %s"
     logger.info(FORMATOOUT % (equipo, seqnum, jornada, combInt, len(result), numEqs, durac,
                               (100.0 * float(ops) / float(numCombs)), numCombs, ops, contExcl))
 
