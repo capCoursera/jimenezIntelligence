@@ -4,14 +4,14 @@
 import bz2
 import csv
 import logging
-from collections import defaultdict
 from itertools import chain, product
-from sys import getsizeof
 from os.path import join
+from sys import getsizeof
 from time import strftime, time
 
+import dask
 import joblib
-from configargparse import ArgumentParser
+from configargparse import SUPPRESS, ArgumentParser
 from dask.distributed import Client, LocalCluster
 
 from SMACB.Guesser import (GeneraCombinacionJugs, agregaJugadores,
@@ -22,8 +22,8 @@ from SMACB.SMconstants import CUPOS, POSICIONES, SEQCLAVES, solucion2clave
 from SMACB.SuperManager import ResultadosJornadas, SuperManagerACB
 from SMACB.TemporadaACB import TemporadaACB
 from Utils.CombinacionesConCupos import GeneraCombinaciones
-from Utils.Misc import FORMATOtimestamp, deepDict, deepDictSet
 from Utils.combinatorics import n_choose_m, prod
+from Utils.Misc import FORMATOtimestamp, deepDict, deepDictSet
 
 NJOBS = 2
 MEMWORKER = "2GB"
@@ -37,7 +37,8 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 
 # create formatter
-formatter = logging.Formatter('%(asctime)s [%(process)d:%(threadName)s@%(name)s %(levelname)s %(relativeCreated)14dms]: %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s [%(process)d:%(threadName)s@%(name)s %(levelname)s %(relativeCreated)14dms]: %(message)s')
 
 # add formatter to ch
 ch.setFormatter(formatter)
@@ -59,7 +60,7 @@ indexes = buildPosCupoIndex()
 
 
 def procesaArgumentos():
-    parser = ArgumentParser()
+    parser = ArgumentParser(argument_default=SUPPRESS)
 
     parser.add('-i', dest='infile', type=str, env_var='SM_INFILE', required=True)
     parser.add('-t', dest='temporada', type=str, env_var='SM_TEMPORADA', required=True)
@@ -92,7 +93,8 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
 
     claves = SEQCLAVES.copy()
 
-    contExcl = {'in': 0, 'out': 0, 'cubos': 0, 'depth': dict()}
+    tamCubo = prod([len(g['valSets']) for g in grupos2check])
+    contExcl = {'in': 0, 'out': 0, 'cubos': 0, 'cuboIni': tamCubo, 'depth': dict()}
     for i in range(len(claves) + 1):
         contExcl['depth'][i] = 0
 
@@ -130,7 +132,7 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
                 regSol = (equipo, solClaves, prod([x for x in nuevosCombVals]))
                 result.append(regSol)
                 # TODO: logging
-                logger.info("%-16s J:%2d P:%3d Sol: %s", equipo, jornada, seqnum, regSol)
+                logger.info("%-16s P:%3d J:%2d Sol: %s", equipo, seqnum, jornada, regSol)
                 continue
             else:
                 deeperSol = curSol + [prodKey]
@@ -141,8 +143,7 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
 
     solBusq = ", ".join(["%s: %s" % (k, str(val2match[k])) for k in SEQCLAVES])
     numCombs = prod([g['numCombs'] for g in grupos2check])
-    tamCubo = prod([len(g['valSets']) for g in grupos2check])
-    contExcl['cuboIni'] = tamCubo
+
     FORMATOIN = "%-16s P:%3d J:%2d %20s IN  numEqs %16d cubo inicial: %10d Valores a buscar: %s"
     logger.info(FORMATOIN % (equipo, seqnum, jornada, combInt, numCombs, tamCubo, solBusq))
     timeIn = time()
@@ -186,12 +187,12 @@ if __name__ == '__main__':
     jornada = args.jornada
     destdir = args.outputdir
 
-    dh = logging.FileHandler(filename=join(destdir,"TeamGuesser.log"))
+    dh = logging.FileHandler(filename=join(destdir, "TeamGuesser.log"))
     dh.setFormatter(formatter)
     logger.addHandler(dh)
 
     if 'logdir' in args:
-        fh = logging.FileHandler(filename=join(args.logdir,"J%03d.log" % jornada))
+        fh = logging.FileHandler(filename=join(args.logdir, "J%03d.log" % jornada))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 
@@ -201,13 +202,9 @@ if __name__ == '__main__':
         configParallel['n_jobs'] = args.nproc
         configParallel['prefer'] = args.joblibmode
         # configParallel['require'] = 'sharedmem'
-
-    elif args.backend == 'dasklocal':
-        configParallel['backend'] = "dask"
-        cluster = LocalCluster(n_workers=args.nproc, threads_per_worker=1, memory_limit=args.memworker)
-        client = Client(cluster)
     elif args.backend == 'daskremote':
         configParallel['backend'] = "dask"
+
         error = 0
         if 'scheduler' not in args:
             logger.error("Backend: %s. Falta scheduler '-x' o '--scheduler'.")
@@ -219,10 +216,6 @@ if __name__ == '__main__':
             logger.error("Backend: %s. Hubo %d errores. Saliendo." % (args.backend, error))
             exit(1)
 
-        client = Client('tcp://%s:8786' % args.scheduler)
-        for egg in args.package:
-            client.upload_file(egg)
-        configParallel['scheduler_host'] = (args.scheduler, 8786)
     elif args.backend == 'daskyarn':
         configParallel['backend'] = "dask"
         error = 0
@@ -232,6 +225,7 @@ if __name__ == '__main__':
         if error:
             logger.error("Backend: %s. Hubo %d errores. Saliendo." % (args.backend, error))
             exit(1)
+
     else:
         pass
 
@@ -249,7 +243,7 @@ if __name__ == '__main__':
         resultadoTemporada = temporada.extraeDatosJugadores()
         logger.info("Cargada información de temporada de %s" % strftime(FORMATOtimestamp, temporada.timestamp))
 
-    badTeams = args.socioOut if args.socioOut is not None else []
+    badTeams = args.socioOut if 'socioOut' in args else []
 
     # Recupera resultados de la jornada
     resJornada = ResultadosJornadas(jornada, sm)
@@ -295,7 +289,7 @@ if __name__ == '__main__':
         dumpVar(varname2fichname(jornada, "jugadores", basedir=destdir), jugadores)
 
         # groupedCombs = []
-        newCuentaGrupos = defaultdict(dict)
+        newCuentaGrupos = dict()
         maxPosCupos = [0] * 9
         numCombsPosYCupos = [[]] * 9
         combsPosYCupos = [[]] * 9
@@ -367,6 +361,7 @@ if __name__ == '__main__':
                 logger.info(formatoTraza, comb, duracion, newCuentaGrupos[comb]['cont'],
                             newCuentaGrupos[comb]['numCombs'], getsizeof(colSets), len(colSets))
 
+        logger.info("Grabando %d grupos de combinaciones." % (len(cuentaGrupos)))
         resDump = dumpVar(nombrefichCuentaGrupos, newCuentaGrupos)
         del newCuentaGrupos
         import gc
@@ -376,35 +371,96 @@ if __name__ == '__main__':
 
     logger.info("Cargados %d grupos de combinaciones. Memory: %d" % (len(cuentaGrupos), getsizeof(cuentaGrupos)))
 
-    resultado = dict()
+    # resultado = dict()
 
-    planesAcorrer = []
     sociosReales.sort()
-    for i, socio in product(range(len(groupedCombsKeys)), sociosReales):
-        plan = groupedCombsKeys[i]
-        planTotal = {'seqnum': i,
-                     'comb': plan,
-                     'grupos2check': [cuentaGrupos[grupo] for grupo in plan],
-                     'val2match': resJornada.resultados[socio],
-                     'equipo': socio,
-                     'jornada': jornada}
-        planesAcorrer.append(planTotal)
-
-    logger.info("Planes para ejecutar: %d" % len(planesAcorrer))
 
     if args.backend == 'joblib':
+
+        planesAcorrer = []
+        for i, socio in product(range(len(groupedCombsKeys)), sociosReales):
+            plan = groupedCombsKeys[i]
+            planTotal = {'seqnum': i,
+                         'comb': plan,
+                         'grupos2check': [cuentaGrupos[grupo] for grupo in plan],
+                         'val2match': resJornada.resultados[socio],
+                         'equipo': socio,
+                         'jornada': jornada}
+            planesAcorrer.append(planTotal)
+
+        logger.info("Planes para ejecutar: %d" % len(planesAcorrer))
 
         result = joblib.Parallel(**configParallel)(joblib.delayed(validateCombs)(**plan) for plan in planesAcorrer)
 
         resultadoPlano = list(chain.from_iterable(result))
+        dumpVar(varname2fichname(jornada, "%s-resultado-socios-%s" % (clavesParaNomFich, "-".join(sociosReales)),
+                                 basedir=destdir), resultadoPlano)
 
     elif 'dask' in args.backend:
+        # pass # No termina de funcionar
 
-        with joblib.parallel_backend('dask'):
-            result = joblib.Parallel(**configParallel)(joblib.delayed(validateCombs)(**plan) for plan in planesAcorrer)
+        if args.backend == 'dasklocal':
+            configParallel['backend'] = "dask"
+            cluster = LocalCluster(n_workers=args.nproc, threads_per_worker=1, memory_limit=args.memworker)
+            client = Client(cluster)
+        elif args.backend == 'daskremote':
+            configParallel['backend'] = "dask"
+
+            client = Client('tcp://%s:8786' % args.scheduler)
+            for egg in args.package:
+                client.upload_file(egg)
+
+            configParallel['scheduler_host'] = (args.scheduler, 8786)
+
+        elif args.backend == 'daskyarn':
+            configParallel['backend'] = "dask"
+
+        # Wrapper con variable global
+        def validateDaskVersion(planesConArbol, i, socio, resultadosJornada, jornada):
+
+            return (len(planesConArbol), i, socio, len(resultadosJornada), jornada)
+
+            plan = planesConArbol[i]['comb']
+            grupos2check = [planesConArbol[grupo] for grupo in plan],
+
+            return validateCombs(comb=plan, grupos2check=grupos2check, val2match=resultadosJornada[socio], equipo=socio,
+                                 seqnum=i,
+                                 jornada=jornada)
+
+        logger.info("Antes de VC delayed")
+        validateDask = dask.delayed(validateDaskVersion)
+        logger.info("Antes de CG delayed")
+        cuentaGruposDelayed = dask.delayed(cuentaGrupos)
+        logger.info("Antes de RJ delayed")
+        resultadosJornadaDelayed = dask.delayed(resJornada.resultados)
+        logger.info("All delayed")
+
+        planesAcorrer = []
+        # for i, socio in product(range(len(groupedCombsKeys)), sociosReales):
+        for i, socio in product([10], sociosReales):
+            planTotal = {'planesConArbol': cuentaGruposDelayed,
+                         'i': i,
+                         'resultadosJornada': resultadosJornadaDelayed,
+                         'socio': socio,
+                         'jornada': jornada}
+            planesAcorrer.append(planTotal)
+
+        print(planesAcorrer)
+
+        logger.info("Planes para ejecutar: %d" % len(planesAcorrer))
+
+        futures = client.map(validateDask, planesAcorrer)
+        logger.info("After future")
+
+        r1 = futures.result()
+
+        # dask.compute(result, scheduler='distributed')
+        print(r1)
+
+        print(futures.get())
 
         # result = Parallel(**configParallel)(delayed(validateCombs)(**plan) for plan in planesAcorrer)
-        resultadoPlano = list(chain.from_iterable(result))
+        resultadoPlano = list(chain.from_iterable(r1))
 
     else:
         pass
