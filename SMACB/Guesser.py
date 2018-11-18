@@ -166,3 +166,7 @@ def varname2fichname(jornada, varname, basedir=".", ext="pickle"):
 
 def comb2Key(comb, jornada, joinerChar="-"):
     return ("J%03d" % jornada) + joinerChar + joinerChar.join("%1d_%1d" % (x, comb[x]) for x in comb)
+
+def ig2Key(ig, jornada, joinerChar="-"):
+    return ("J%03d" % jornada) + joinerChar + "+".join("%1d" % x for x in ig)
+

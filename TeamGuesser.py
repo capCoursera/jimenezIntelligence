@@ -17,13 +17,14 @@ from dask.distributed import Client, LocalCluster
 from SMACB.Guesser import (GeneraCombinacionJugs, agregaJugadores,
                            buildPosCupoIndex, comb2Key, dumpVar,
                            getPlayersByPosAndCupoJornada, loadVar,
-                           varname2fichname)
+                           varname2fichname, ig2Key)
 from SMACB.SMconstants import CUPOS, POSICIONES, SEQCLAVES, solucion2clave
 from SMACB.SuperManager import ResultadosJornadas, SuperManagerACB
 from SMACB.TemporadaACB import TemporadaACB
 from Utils.CombinacionesConCupos import GeneraCombinaciones
 from Utils.combinatorics import n_choose_m, prod
 from Utils.Misc import FORMATOtimestamp, deepDict, deepDictSet
+from Utils.pysize import get_size
 
 NJOBS = 2
 MEMWORKER = "2GB"
@@ -88,34 +89,47 @@ def procesaArgumentos():
     return args
 
 
-def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
-    result = []
+def validateCombs(grupos2check, val2match, equipo, jornada):
+    comb = list(grupos2check.keys())
+    combVals = [grupos2check[g] for g in comb]
+    tamCubo = prod([len(g) for g in combVals])
+
+    clavesConTop = ['triples', 'asistencias', 'rebotes']
 
     claves = SEQCLAVES.copy()
 
-    tamCubo = prod([len(g['valSets']) for g in grupos2check])
-    contExcl = {'in': 0, 'out': 0, 'cubos': 0, 'cuboIni': tamCubo, 'depth': dict()}
+    result = []
+
+    contadorExcl = {'in': 0, 'out': 0, 'cuboIni': tamCubo, 'cuboTeorico': 0, 'cuboFiltrado': 0, 'gananciaFiltro': 0, 'depth': dict()}
+
     for i in range(len(claves) + 1):
-        contExcl['depth'][i] = 0
+        contadorExcl['depth'][i] = 0
 
-    combVals = [g['valSets'] for g in grupos2check]
-    combInt = [g['comb'] for g in grupos2check]
-
-    def ValidaCombinacion(arbolSols, claves, val2match, curSol, equipo, combInt):
+    def ValidaCombinacion(arbolSols, claves, val2match, curSol, equipo):
         if len(claves) == 0:
             return
 
-        contExcl['depth'][len(claves)] += 1
-        contExcl['in'] += 1
-        contExcl['cubos'] += prod([len(g) for g in grupos2check])
+        contadorExcl['depth'][len(claves)] += 1
+        contadorExcl['in'] += 1
+        cuboIni = prod([len(g) for g in grupos2check])
+        contadorExcl['cuboTeorico'] += cuboIni
 
         claveAct = claves[0]
+
+        if claveAct in clavesConTop:
+            clavesAMirar = [[k for k in a.keys() if k <= val2match[claveAct]] for a in arbolSols]
+        else:
+            clavesAMirar = [[k for k in a.keys()] for a in arbolSols]
+
+        cuboFinal = prod([len(x) for x in clavesAMirar])
+        contadorExcl['cuboFiltrado'] += cuboFinal
+        contadorExcl['gananciaFiltro'] += (cuboIni - cuboFinal)
 
         for prodKey in product(*arbolSols):
             sumKey = sum(prodKey)
 
             if sumKey != val2match[claveAct]:
-                contExcl['out'] += 1
+                contadorExcl['out'] += 1
                 continue
 
             nuevosCombVals = [c[v] for c, v in zip(arbolSols, prodKey)]
@@ -127,35 +141,34 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
                     assert (solAcum[k] == val2match[k])
 
                 valsSolD = [dict(zip(SEQCLAVES, s)) for s in list(zip(*nuevaSol))]
-                solClaves = [solucion2clave(c, s) for c, s in zip(comb, valsSolD)]
+                solClaves = [(c, s) for c, s in zip(comb, valsSolD)]
+                prodRem = list(product(*nuevosCombVals))
+                regSol = (equipo, solClaves, prod([len(x) for x in nuevosCombVals]), prodRem)
 
-                regSol = (equipo, solClaves, prod([x for x in nuevosCombVals]))
                 result.append(regSol)
                 # TODO: logging
-                logger.info("%-16s P:%3d J:%2d Sol: %s", equipo, seqnum, jornada, regSol)
+                logger.info("%-16s J:%2d Sol: %s -> %s", equipo, jornada, regSol, prodRem)
                 continue
             else:
                 deeperSol = curSol + [prodKey]
-                deeper = ValidaCombinacion(nuevosCombVals, claves[1:], val2match, deeperSol, equipo, combInt)
+                deeper = ValidaCombinacion(nuevosCombVals, claves[1:], val2match, deeperSol, equipo)
                 if deeper is None:
                     continue
         return None
 
     solBusq = ", ".join(["%s: %s" % (k, str(val2match[k])) for k in SEQCLAVES])
-    numCombs = prod([g['numCombs'] for g in grupos2check])
 
-    FORMATOIN = "%-16s P:%3d J:%2d %20s IN  numEqs %16d cubo inicial: %10d Valores a buscar: %s"
-    logger.info(FORMATOIN % (equipo, seqnum, jornada, combInt, numCombs, tamCubo, solBusq))
+    FORMATOIN = "%-16s J:%2d IN  cubo inicial: %10d Valores a buscar: %s"
+    logger.info(FORMATOIN % (equipo, jornada, tamCubo, solBusq))
     timeIn = time()
-    ValidaCombinacion(combVals, claves, val2match, [], equipo, combInt)
+    ValidaCombinacion(combVals, claves, val2match, [], equipo)
     timeOut = time()
     durac = timeOut - timeIn
 
     numEqs = sum([eq[-1] for eq in result])
-    ops = contExcl['cubos']
-    FORMATOOUT = "%-16s P:%3d J:%2d %20s OUT %3d %3d %10.3fs %10.8f%% %16d -> %12d %s"
-    logger.info(FORMATOOUT % (equipo, seqnum, jornada, combInt, len(result), numEqs, durac,
-                              (100.0 * float(ops) / float(numCombs)), numCombs, ops, contExcl))
+    ops = contadorExcl['cubos']
+    FORMATOOUT = "%-16s J:%2d %20s OUT %3d %3d %10.3fs Combs analizadas: %12d %s"
+    logger.info(FORMATOOUT % (equipo, jornada, len(result), numEqs, durac, ops, contadorExcl))
 
     return result
 
@@ -278,18 +291,19 @@ if __name__ == '__main__':
 
     logger.info("Cargando grupos de jornada %d (secuencia: %s)" % (jornada, ", ".join(SEQCLAVES)))
 
-    nombrefichCuentaGrupos = varname2fichname(jornada=jornada, varname=(clavesParaNomFich + "-cuentaGrupos"),
+    nombrefichCuentaGrupos = varname2fichname(jornada=jornada, varname=(clavesParaNomFich + "-colSets"),
                                               basedir=destdir)
-    cuentaGrupos = loadVar(nombrefichCuentaGrupos)
+    colSets = loadVar(nombrefichCuentaGrupos)
 
-    if cuentaGrupos is None:
+    if colSets is None:
         logger.info("Generando grupos para jornada %d Seq claves %s" % (jornada, ", ".join(SEQCLAVES)))
         posYcupos, jugadores, lenPosCupos = getPlayersByPosAndCupoJornada(jornada, sm, temporada)
 
-        dumpVar(varname2fichname(jornada, "jugadores", basedir=destdir), jugadores)
+        # dumpVar(varname2fichname(jornada, "jugadores", basedir=destdir), jugadores)
 
-        # groupedCombs = []
-        newCuentaGrupos = dict()
+        cuentaGrupos = dict()
+        colSets = dict()
+
         maxPosCupos = [0] * 9
         numCombsPosYCupos = [[]] * 9
         combsPosYCupos = [[]] * 9
@@ -302,28 +316,31 @@ if __name__ == '__main__':
             for n in range(maxPosCupos[i] + 1):
                 numCombsPosYCupos[i][n] = n_choose_m(lenPosCupos[i], n)
 
-        indexGroups = {p: [indexes[p][c] for c in CUPOS] for p in POSICIONES}
-
         # Distribuciones de jugadores válidas por posición y cupo
         for c in groupedCombs:
-
             for grupoComb in c:
+                ig = sorted(grupoComb.keys())
                 claveComb = comb2Key(grupoComb, jornada)
-                if claveComb not in newCuentaGrupos:
+                if claveComb not in cuentaGrupos:
+                    claveIG = ig2Key(ig, jornada)
                     numCombs = prod([numCombsPosYCupos[x][grupoComb[x]] for x in grupoComb])
-                    newCuentaGrupos[claveComb] = {'cont': 0, 'comb': grupoComb, 'numCombs': numCombs, 'key': claveComb}
-                newCuentaGrupos[claveComb]['cont'] += 1
+                    cuentaGrupos[claveComb] = {'cont': 0, 'comb': grupoComb, 'numCombs': numCombs, 'key': claveComb, 'keyIG': claveIG}
+                cuentaGrupos[claveComb]['cont'] += 1
 
-        logger.info("Numero de grupos: %d", sum([newCuentaGrupos[x]['numCombs'] for x in newCuentaGrupos]))
+        logger.info("Numero de grupos: %d", sum([cuentaGrupos[x]['numCombs'] for x in cuentaGrupos]))
+
 
         with bz2.open(filename=varname2fichname(jornada, varname=(clavesParaNomFich + "-grupos"), basedir=destdir,
                                                 ext="csv.bz2"),
                       mode='wt') as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=CLAVESCSV, delimiter="|")
-            for comb in newCuentaGrupos:
+            for comb in cuentaGrupos:
                 combList = []
+                claveIG = cuentaGrupos[comb]['keyIG']
+                if claveIG not in colSets:
+                    colSets[claveIG] = dict()
 
-                combGroup = newCuentaGrupos[comb]['comb']
+                combGroup = cuentaGrupos[comb]['comb']
 
                 timeIn = time()
                 for i in combGroup:
@@ -333,8 +350,6 @@ if __name__ == '__main__':
                         combsPosYCupos[i][n] = GeneraCombinacionJugs(posYcupos[i], n)
                     if n != 0:
                         combList.append(combsPosYCupos[i][n])
-
-                colSets = dict()
 
                 for pr in product(*combList):
                     aux = []
@@ -351,120 +366,37 @@ if __name__ == '__main__':
                     agr['jugs'] = claveJugs
                     writer.writerow(agr)
 
-                    deepDictSet(colSets, indexComb, deepDict(colSets, indexComb, int) + 1)
+                    deepDictSet(colSets[claveIG], indexComb + [comb], deepDict(colSets[claveIG], indexComb + [comb], int) + 1)
 
                 timeOut = time()
                 duracion = timeOut - timeIn
 
-                newCuentaGrupos[comb]['valSets'] = colSets
-                formatoTraza = "Gen grupos %-20s %10.3fs cont: %3d numero combs %8d memoria %8d num claves L0: %d"
-                logger.info(formatoTraza, comb, duracion, newCuentaGrupos[comb]['cont'],
-                            newCuentaGrupos[comb]['numCombs'], getsizeof(colSets), len(colSets))
+                tamCuboIni = prod([len(colSets[x]) for x in colSets])
+                formatoTraza = "Gen grupos %-20s %10.3fs cont: %3d numero combs %8d memoria %14d cubo inicial: %5d"
+                logger.info(formatoTraza, comb, duracion, cuentaGrupos[comb]['cont'], cuentaGrupos[comb]['numCombs'],
+                            get_size(colSets), tamCuboIni)
 
-        logger.info("Grabando %d grupos de combinaciones." % (len(cuentaGrupos)))
-        resDump = dumpVar(nombrefichCuentaGrupos, newCuentaGrupos)
-        del newCuentaGrupos
-        import gc
-
-        gc.collect()
-        cuentaGrupos = loadVar(nombrefichCuentaGrupos)
-
-    logger.info("Cargados %d grupos de combinaciones. Memory: %d" % (len(cuentaGrupos), getsizeof(cuentaGrupos)))
+        logger.info("Grabando %d grupos de combinaciones. En RAM: %d" % (len(cuentaGrupos), get_size(colSets)))
+        resDump = dumpVar(nombrefichCuentaGrupos, colSets)
+        logger.info("Grabados %d grupos de combinaciones en %s" % (len(cuentaGrupos), resDump[0]))
+        
+    else:
+        logger.info("Cargados %d grupos de combinaciones. Memory: %d" % (len(colSets), get_size(colSets)))
 
     # resultado = dict()
 
     sociosReales.sort()
+    result = []
 
-    if args.backend == 'joblib':
+    for socio in sociosReales:
+        val2match = resJornada.resultados[socio]
 
-        planesAcorrer = []
-        for i, socio in product(range(len(groupedCombsKeys)), sociosReales):
-            plan = groupedCombsKeys[i]
-            planTotal = {'seqnum': i,
-                         'comb': plan,
-                         'grupos2check': [cuentaGrupos[grupo] for grupo in plan],
-                         'val2match': resJornada.resultados[socio],
-                         'equipo': socio,
-                         'jornada': jornada}
-            planesAcorrer.append(planTotal)
+        resSocio = validateCombs(colSets, val2match, socio, jornada)
+        result.append(resSocio)
 
-        logger.info("Planes para ejecutar: %d" % len(planesAcorrer))
+    print(result)
 
-        result = joblib.Parallel(**configParallel)(joblib.delayed(validateCombs)(**plan) for plan in planesAcorrer)
-
-        resultadoPlano = list(chain.from_iterable(result))
-        dumpVar(varname2fichname(jornada, "%s-resultado-socios-%s" % (clavesParaNomFich, "-".join(sociosReales)),
-                                 basedir=destdir), resultadoPlano)
-
-    elif 'dask' in args.backend:
-        # pass # No termina de funcionar
-
-        if args.backend == 'dasklocal':
-            configParallel['backend'] = "dask"
-            cluster = LocalCluster(n_workers=args.nproc, threads_per_worker=1, memory_limit=args.memworker)
-            client = Client(cluster)
-        elif args.backend == 'daskremote':
-            configParallel['backend'] = "dask"
-
-            client = Client('tcp://%s:8786' % args.scheduler)
-            for egg in args.package:
-                client.upload_file(egg)
-
-            configParallel['scheduler_host'] = (args.scheduler, 8786)
-
-        elif args.backend == 'daskyarn':
-            configParallel['backend'] = "dask"
-
-        # Wrapper con variable global
-        def validateDaskVersion(planesConArbol, i, socio, resultadosJornada, jornada):
-
-            return (len(planesConArbol), i, socio, len(resultadosJornada), jornada)
-
-            plan = planesConArbol[i]['comb']
-            grupos2check = [planesConArbol[grupo] for grupo in plan],
-
-            return validateCombs(comb=plan, grupos2check=grupos2check, val2match=resultadosJornada[socio], equipo=socio,
-                                 seqnum=i,
-                                 jornada=jornada)
-
-        logger.info("Antes de VC delayed")
-        validateDask = dask.delayed(validateDaskVersion)
-        logger.info("Antes de CG delayed")
-        cuentaGruposDelayed = dask.delayed(cuentaGrupos)
-        logger.info("Antes de RJ delayed")
-        resultadosJornadaDelayed = dask.delayed(resJornada.resultados)
-        logger.info("All delayed")
-
-        planesAcorrer = []
-        # for i, socio in product(range(len(groupedCombsKeys)), sociosReales):
-        for i, socio in product([10], sociosReales):
-            planTotal = {'planesConArbol': cuentaGruposDelayed,
-                         'i': i,
-                         'resultadosJornada': resultadosJornadaDelayed,
-                         'socio': socio,
-                         'jornada': jornada}
-            planesAcorrer.append(planTotal)
-
-        print(planesAcorrer)
-
-        logger.info("Planes para ejecutar: %d" % len(planesAcorrer))
-
-        futures = client.map(validateDask, planesAcorrer)
-        logger.info("After future")
-
-        r1 = futures.result()
-
-        # dask.compute(result, scheduler='distributed')
-        print(r1)
-
-        print(futures.get())
-
-        # result = Parallel(**configParallel)(delayed(validateCombs)(**plan) for plan in planesAcorrer)
-        resultadoPlano = list(chain.from_iterable(r1))
-
-    else:
-        pass
-
+    resultadoPlano = list(chain.from_iterable(result))
     dumpVar(varname2fichname(jornada, "%s-resultado-socios-%s" % (clavesParaNomFich, "-".join(sociosReales)),
                              basedir=destdir), resultadoPlano)
 
