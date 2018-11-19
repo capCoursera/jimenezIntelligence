@@ -117,9 +117,9 @@ def validateCombs(grupos2check, val2match, equipo, jornada):
         claveAct = claves[0]
 
         if claveAct in clavesConTop:
-            clavesAMirar = [[k for k in a.keys() if k <= val2match[claveAct]] for a in arbolSols]
+            clavesAMirar = [sorted([k for k in a.keys() if k <= val2match[claveAct]]) for a in arbolSols]
         else:
-            clavesAMirar = [[k for k in a.keys()] for a in arbolSols]
+            clavesAMirar = [sorted([k for k in a.keys()]) for a in arbolSols]
 
         cuboFinal = prod([len(x) for x in clavesAMirar])
         contadorExcl['cuboFiltrado'] += cuboFinal
