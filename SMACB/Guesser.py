@@ -1,14 +1,14 @@
+import logging
 from collections import defaultdict
 from itertools import combinations
 from os.path import join
 from pathlib import Path
 
 import joblib
-import logging
-logger = logging.getLogger(__name__)
-
 
 from SMACB.SMconstants import buildPosCupoIndex, calculaValSuperManager
+
+logger = logging.getLogger(__name__)
 
 
 def agregaJugadores(listaJugs, datosJugs):
@@ -166,3 +166,7 @@ def varname2fichname(jornada, varname, basedir=".", ext="pickle"):
 
 def comb2Key(comb, jornada, joinerChar="-"):
     return ("J%03d" % jornada) + joinerChar + joinerChar.join("%1d_%1d" % (x, comb[x]) for x in comb)
+
+
+def ig2Key(ig, jornada, joinerChar="-"):
+    return ("J%03d" % jornada) + joinerChar + "+".join("%1d" % x for x in ig)
