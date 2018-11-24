@@ -24,6 +24,7 @@ from SMACB.TemporadaACB import TemporadaACB
 from Utils.CombinacionesConCupos import GeneraCombinaciones
 from Utils.combinatorics import n_choose_m, prod
 from Utils.Misc import FORMATOtimestamp, deepDict, deepDictSet
+from Utils.pysize import get_size
 
 NJOBS = 2
 MEMWORKER = "2GB"
@@ -89,17 +90,21 @@ def procesaArgumentos():
 
 
 def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
+    combVals = [g['valSets'] for g in grupos2check]
+    combInt = [g['key'] for g in grupos2check]
+
+    tamCubo = prod([len(g) for g in combVals])
+
+    clavesConTop = ['triples', 'asistencias', 'rebotes', 'puntos']
     result = []
 
     claves = SEQCLAVES.copy()
 
-    tamCubo = prod([len(g['valSets']) for g in grupos2check])
-    contExcl = {'in': 0, 'out': 0, 'cubos': 0, 'cuboIni': tamCubo, 'depth': dict()}
+    contExcl = {'in': 0, 'out': 0, 'cuboIni': tamCubo, 'cuboTeorico': 0, 'cuboFiltrado': 0, 'gananciaFiltro': 0,
+                'depth': dict()}
+
     for i in range(len(claves) + 1):
         contExcl['depth'][i] = 0
-
-    combVals = [g['valSets'] for g in grupos2check]
-    combInt = [g['comb'] for g in grupos2check]
 
     def ValidaCombinacion(arbolSols, claves, val2match, curSol, equipo, combInt):
         if len(claves) == 0:
@@ -107,11 +112,20 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
 
         contExcl['depth'][len(claves)] += 1
         contExcl['in'] += 1
-        contExcl['cubos'] += prod([len(g) for g in grupos2check])
+        cuboIni = prod([len(g) for g in arbolSols])
+        contExcl['cuboTeorico'] += cuboIni
 
         claveAct = claves[0]
 
-        for prodKey in product(*arbolSols):
+        if claveAct in clavesConTop:
+            clavesAMirar = [sorted([k for k in a.keys() if k <= val2match[claveAct]]) for a in arbolSols]
+            cuboFinal = prod([len(x) for x in clavesAMirar])
+            contExcl['cuboFiltrado'] += cuboFinal
+            contExcl['gananciaFiltro'] += (cuboIni - cuboFinal)
+        else:
+            clavesAMirar = [sorted([k for k in a.keys()]) for a in arbolSols]
+
+        for prodKey in product(*clavesAMirar):
             sumKey = sum(prodKey)
 
             if sumKey != val2match[claveAct]:
@@ -145,14 +159,15 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
     numCombs = prod([g['numCombs'] for g in grupos2check])
 
     FORMATOIN = "%-16s P:%3d J:%2d %20s IN  numEqs %16d cubo inicial: %10d Valores a buscar: %s"
-    logger.info(FORMATOIN % (equipo, seqnum, jornada, combInt, numCombs, tamCubo, solBusq))
+    logger.info(FORMATOIN % (equipo, seqnum, jornada, comb, numCombs, tamCubo, solBusq))
     timeIn = time()
-    ValidaCombinacion(combVals, claves, val2match, [], equipo, combInt)
+    ValidaCombinacion(combVals, claves, val2match, [], equipo, comb)
     timeOut = time()
     durac = timeOut - timeIn
 
     numEqs = sum([eq[-1] for eq in result])
-    ops = contExcl['cubos']
+
+    ops = contExcl['cuboFiltrado']
     FORMATOOUT = "%-16s P:%3d J:%2d %20s OUT %3d %3d %10.3fs %10.8f%% %16d -> %12d %s"
     logger.info(FORMATOOUT % (equipo, seqnum, jornada, combInt, len(result), numEqs, durac,
                               (100.0 * float(ops) / float(numCombs)), numCombs, ops, contExcl))
@@ -215,7 +230,6 @@ if __name__ == '__main__':
         if error:
             logger.error("Backend: %s. Hubo %d errores. Saliendo." % (args.backend, error))
             exit(1)
-
     elif args.backend == 'daskyarn':
         configParallel['backend'] = "dask"
         error = 0
@@ -225,23 +239,18 @@ if __name__ == '__main__':
         if error:
             logger.error("Backend: %s. Hubo %d errores. Saliendo." % (args.backend, error))
             exit(1)
-
     else:
         pass
 
     # Carga datos
     sm = SuperManagerACB()
-    if 'infile' in args and args.infile:
-        sm.loadData(args.infile)
-        logger.info("Cargados datos SuperManager de %s" % strftime(FORMATOtimestamp, sm.timestamp))
+    sm.loadData(args.infile)
+    logger.info("Cargados datos SuperManager de %s" % strftime(FORMATOtimestamp, sm.timestamp))
 
-    temporada = None
-    resultadoTemporada = None
-    if 'temporada' in args and args.temporada:
-        temporada = TemporadaACB()
-        temporada.cargaTemporada(args.temporada)
-        resultadoTemporada = temporada.extraeDatosJugadores()
-        logger.info("Cargada información de temporada de %s" % strftime(FORMATOtimestamp, temporada.timestamp))
+    temporada = TemporadaACB()
+    temporada.cargaTemporada(args.temporada)
+    resultadoTemporada = temporada.extraeDatosJugadores()
+    logger.info("Cargada información de temporada de %s" % strftime(FORMATOtimestamp, temporada.timestamp))
 
     badTeams = args.socioOut if 'socioOut' in args else []
 
@@ -260,7 +269,11 @@ if __name__ == '__main__':
             if s in badTeams:
                 pref = "NO"
 
-            print("[%s] %s -> '%s'" % (pref, s, resJornada.socio2equipo[s]))
+            datosAmostrar = [pref, s, resJornada.socio2equipo[s]]
+            for k in ['valJornada', 'broker', 'puntos', 'rebotes', 'triples', 'asistencias']:
+                datosAmostrar.append(resJornada.resultados[s][k])
+            LINEAFMT = "[%s] %-16s -> '%-25s +' V %6.2f Broker %8d P %3d R %3d T %3d A %3d"
+            print(LINEAFMT % tuple(datosAmostrar))
 
         exit(0)
 
@@ -352,22 +365,18 @@ if __name__ == '__main__':
                     writer.writerow(agr)
 
                     deepDictSet(colSets, indexComb, deepDict(colSets, indexComb, int) + 1)
+                    newCuentaGrupos[comb]['valSets'] = colSets
 
                 timeOut = time()
                 duracion = timeOut - timeIn
 
-                newCuentaGrupos[comb]['valSets'] = colSets
-                formatoTraza = "Gen grupos %-20s %10.3fs cont: %3d numero combs %8d memoria %8d num claves L0: %d"
+                formatoTraza = "Gen grupos %-20s %10.3fs cont: %3d numero combs %8d memoria %12d num claves L0: %2d"
                 logger.info(formatoTraza, comb, duracion, newCuentaGrupos[comb]['cont'],
-                            newCuentaGrupos[comb]['numCombs'], getsizeof(colSets), len(colSets))
+                            newCuentaGrupos[comb]['numCombs'], get_size(colSets), len(colSets))
 
-        logger.info("Grabando %d grupos de combinaciones." % (len(cuentaGrupos)))
+        logger.info("Grabando %d grupos de combinaciones." % (len(newCuentaGrupos)))
         resDump = dumpVar(nombrefichCuentaGrupos, newCuentaGrupos)
-        del newCuentaGrupos
-        import gc
-
-        gc.collect()
-        cuentaGrupos = loadVar(nombrefichCuentaGrupos)
+        cuentaGrupos = newCuentaGrupos
 
     logger.info("Cargados %d grupos de combinaciones. Memory: %d" % (len(cuentaGrupos), getsizeof(cuentaGrupos)))
 
