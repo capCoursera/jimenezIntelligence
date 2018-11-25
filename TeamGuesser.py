@@ -89,7 +89,7 @@ def procesaArgumentos():
     return args
 
 
-def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
+def validateCombs(grupos2check, val2match, equipo, seqnum, jornada):
     combVals = [g['valSets'] for g in grupos2check]
     combInt = [g['key'] for g in grupos2check]
 
@@ -141,7 +141,7 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
                     assert (solAcum[k] == val2match[k])
 
                 valsSolD = [dict(zip(SEQCLAVES, s)) for s in list(zip(*nuevaSol))]
-                solClaves = [solucion2clave(c, s) for c, s in zip(comb, valsSolD)]
+                solClaves = [solucion2clave(c, s) for c, s in zip(combInt, valsSolD)]
 
                 regSol = (equipo, solClaves, prod([x for x in nuevosCombVals]))
                 result.append(regSol)
@@ -159,9 +159,9 @@ def validateCombs(comb, grupos2check, val2match, equipo, seqnum, jornada):
     numCombs = prod([g['numCombs'] for g in grupos2check])
 
     FORMATOIN = "%-16s P:%3d J:%2d %20s IN  numEqs %16d cubo inicial: %10d Valores a buscar: %s"
-    logger.info(FORMATOIN % (equipo, seqnum, jornada, comb, numCombs, tamCubo, solBusq))
+    logger.info(FORMATOIN % (equipo, seqnum, jornada, combInt, numCombs, tamCubo, solBusq))
     timeIn = time()
-    ValidaCombinacion(combVals, claves, val2match, [], equipo, comb)
+    ValidaCombinacion(combVals, claves, val2match, [], equipo, combInt)
     timeOut = time()
     durac = timeOut - timeIn
 
@@ -390,7 +390,6 @@ if __name__ == '__main__':
         for i, socio in product(range(len(groupedCombsKeys)), sociosReales):
             plan = groupedCombsKeys[i]
             planTotal = {'seqnum': i,
-                         'comb': plan,
                          'grupos2check': [cuentaGrupos[grupo] for grupo in plan],
                          'val2match': resJornada.resultados[socio],
                          'equipo': socio,
