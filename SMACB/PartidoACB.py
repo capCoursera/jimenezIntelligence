@@ -403,6 +403,29 @@ class PartidoACB(object):
 
         return (dfResult)
 
+    def clasifPartido(self):
+        CLAVESGLOBALES = ['Jornada', 'FechaHora', 'prorrogas']
+        result = []
+
+        for l in self.Equipos:
+            resEquipo = dict()
+            resEquipo['codigo']=self.CodigosCalendario[l]
+            for k in CLAVESGLOBALES:
+                resEquipo[k] = self.__getattribute__(k)
+            resEquipo['haGanado'] = self.Equipos[l]['haGanado']
+            resEquipo['esLocal'] = l == 'Local'
+            resEquipo['yo-estads'] = self.Equipos[l]['estads']
+            resEquipo['otro-estads'] = self.Equipos[OtherTeam(l)]['estads']
+            resEquipo['rival'] = self.Equipos[OtherTeam(l)]['Nombre']
+            resEquipo['cod-rival'] = self.CodigosCalendario[OtherTeam(l)]
+            resEquipo['diferencia'] = self.Equipos[l]['Puntos'] - self.Equipos[OtherTeam(l)]['Puntos']
+            resEquipo['yo-estads']['defAro'] = 100.0 / (1 + (resEquipo['otro-estads']['R-O'] / resEquipo['yo-estads']['R-D']))
+            #TODO: Calculo posesiones, ...
+            result.append(resEquipo)
+
+        return result
+
+
 
 def GeneraURLpartido(link):
     def CheckParameters(dictParams):
