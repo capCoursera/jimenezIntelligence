@@ -404,34 +404,49 @@ class PartidoACB(object):
         return (dfResult)
 
     def clasifPartido(self):
-        CLAVESGLOBALES = ['Jornada', 'FechaHora', 'prorrogas']
+        """
+        De cada partido extrae los datos de cada contendiente y los del rival. Creado para el dossier
+        (sacar la clasificaci�n)
+        :return: lista con diccionarios con los datos para cada partido y contendiente.
+        """
+
+        CLAVESGLOBALES = ['Jornada', 'FechaHora', 'prorrogas', 'url']
         result = []
 
         for l in self.Equipos:
             resEquipo = dict()
             resEquipo['nombre'] = self.Equipos[l]['Nombre']
-            resEquipo['codigo']=self.CodigosCalendario[l]
+            resEquipo['codigo'] = self.CodigosCalendario[l]
             resEquipo['rival'] = self.Equipos[OtherTeam(l)]['Nombre']
             resEquipo['cod-rival'] = self.CodigosCalendario[OtherTeam(l)]
             for k in CLAVESGLOBALES:
                 resEquipo[k] = self.__getattribute__(k)
             resEquipo['haGanado'] = self.Equipos[l]['haGanado']
-            resEquipo['esLocal'] = l == 'Local'
+            resEquipo['esLocal'] = ('Local' == l)
             resEquipo['yo-estads'] = self.Equipos[l]['estads']
             resEquipo['otro-estads'] = self.Equipos[OtherTeam(l)]['estads']
 
             resEquipo['diferencia'] = self.Equipos[l]['Puntos'] - self.Equipos[OtherTeam(l)]['Puntos']
-            resEquipo['yo-estads']['defAro'] = 100.0 / (1 + (resEquipo['otro-estads']['R-O'] / resEquipo['yo-estads']['R-D']))
+            resEquipo['yo-estads']['Prec'] = self.Equipos[OtherTeam(l)]['Puntos']
+            resEquipo['yo-estads']['defAro'] = 100.0 / (
+                        1 + (resEquipo['otro-estads']['R-O'] / resEquipo['yo-estads']['R-D']))
+            resEquipo['yo-estads']['ataAro'] = 100.0 / (
+                        1 + (resEquipo['otro-estads']['R-D'] / resEquipo['yo-estads']['R-O']))
+
             resEquipo['yo-estads']['TC-I'] = resEquipo['yo-estads']['T2-I'] + resEquipo['yo-estads']['T3-I']
             resEquipo['yo-estads']['TC-C'] = resEquipo['yo-estads']['T2-C'] + resEquipo['yo-estads']['T3-C']
             resEquipo['yo-estads']['TC%'] = 100.0 * resEquipo['yo-estads']['TC-C'] / resEquipo['yo-estads']['TC-I']
+            resEquipo['yo-estads']['T1%'] = 100.0 * resEquipo['yo-estads']['T1-C'] / resEquipo['yo-estads']['T1-I']
+            resEquipo['yo-estads']['T2%'] = 100.0 * resEquipo['yo-estads']['T2-C'] / resEquipo['yo-estads']['T2-I']
+            resEquipo['yo-estads']['T3%'] = 100.0 * resEquipo['yo-estads']['T3-C'] / resEquipo['yo-estads']['T3-I']
 
+            resEquipo['yo-estads']['P2%'] = 100.0 * 2 * resEquipo['yo-estads']['T2-C'] / resEquipo['yo-estads']['P']
+            resEquipo['yo-estads']['P3%'] = 100.0 * 3 * resEquipo['yo-estads']['T3-C'] / resEquipo['yo-estads']['P']
 
-            #TODO: Calculo posesiones, ...
+            # TODO: Calculo posesiones, ...
             result.append(resEquipo)
 
         return result
-
 
 
 def GeneraURLpartido(link):

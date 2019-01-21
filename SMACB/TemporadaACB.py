@@ -6,8 +6,10 @@ Created on Jan 4, 2018
 
 from calendar import timegm
 from collections import defaultdict
-from copy import copy
+from copy import copy, deepcopy
+from itertools import chain
 from pickle import dump, load
+from statistics import mean, median, stdev
 from sys import setrecursionlimit
 from time import gmtime, strftime
 
@@ -307,6 +309,12 @@ class TemporadaACB(object):
         return (dfResult)
 
     def extraeDataframePartidos(self):
+        # TODO: ¿Para qu� hice esto? Puede ser �til para el dossier
+        """
+        Devuelve un dataframe con una fila para cada jugador y columnas con las listas con las participaciones de los
+        jugadores en todos los partidos.
+        :return:
+        """
         resultado = dict()
 
         maxJ = self.maxJornada()
@@ -439,6 +447,62 @@ class TemporadaACB(object):
                     aux['valFromP'] = calculaValSuperManager(valP, jugData['haGanado'])
 
                     result[jug] = aux
+
+        return result
+
+    def extraePartidosPorEquipo(self):
+        result = defaultdict(list)
+        for e in chain.from_iterable([self.Partidos[p].clasifPartido() for p in self.Partidos]):
+            result[e['codigo']].append(e)
+
+        return result
+
+    def obtenClasificacion(self):
+        INTKEYS = ['Segs', 'P', 'T2-C', 'T2-I', 'T3-C', 'T3-I', 'T1-C', 'T1-I', 'REB-T', 'R-D', 'R-O',
+                   'A', 'BR', 'BP', 'TAP-F', 'TAP-C', 'FP-F', 'FP-C', 'V', 'TC-I', 'TC-C', 'Prec']
+        FLOKEYS = ['T2%', 'T3%', 'T1%', 'defAro', 'TC%', 'P2%', 'P3%', 'ataAro']
+        entrada = {'J': 0, 'V': 0, 'D': 0, 'ratio': 0.0, 'F': 0, 'C': 0, 'prorrogas': 0, 'means': dict(),
+                   'stds': dict(), 'medians': dict()}
+        el2cf = {True: 'casa', False: 'fuera'}
+        hg2vd = {True: 'V', False: 'D'}
+
+        result = dict()
+
+        for e, ps in self.extraePartidosPorEquipo().items():
+            result[e] = dict()
+            result[e]['Nombre'] = ""
+            result[e]['total'] = deepcopy(entrada)
+            result[e]['casa'] = deepcopy(entrada)
+            result[e]['fuera'] = deepcopy(entrada)
+
+            for p in ps:
+                locs = ('total', el2cf[p['esLocal']])
+
+                for loc in locs:
+                    result[e]['Nombre'] = p['nombre']
+                    result[e][loc]['J'] += 1
+                    result[e][loc][hg2vd[p['haGanado']]] += 1
+                    result[e][loc]['ratio'] = 100.0 * result[e][loc]['V'] / result[e][loc]['J']
+                    result[e][loc]['F'] += p['yo-estads']['P']
+                    result[e][loc]['C'] += p['otro-estads']['P']
+                    result[e][loc]['prorrogas'] += p['prorrogas']
+
+            for k in INTKEYS + FLOKEYS:
+                obs = [p['yo-estads'][k] for p in ps]
+
+                result[e]['total']['means'][k] = mean(obs)
+                result[e]['total']['stds'][k] = stdev(obs)
+                result[e]['total']['medians'][k] = median(obs)
+
+            for cf in [True, False]:
+                loc = el2cf[cf]
+
+                for k in INTKEYS + FLOKEYS:
+                    obs = [p['yo-estads'][k] for p in ps if p['esLocal'] == cf]
+
+                    result[e][loc]['means'][k] = mean(obs)
+                    result[e][loc]['stds'][k] = stdev(obs)
+                    result[e][loc]['medians'][k] = median(obs)
 
         return result
 
