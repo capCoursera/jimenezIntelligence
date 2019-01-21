@@ -409,17 +409,24 @@ class PartidoACB(object):
 
         for l in self.Equipos:
             resEquipo = dict()
+            resEquipo['nombre'] = self.Equipos[l]['Nombre']
             resEquipo['codigo']=self.CodigosCalendario[l]
+            resEquipo['rival'] = self.Equipos[OtherTeam(l)]['Nombre']
+            resEquipo['cod-rival'] = self.CodigosCalendario[OtherTeam(l)]
             for k in CLAVESGLOBALES:
                 resEquipo[k] = self.__getattribute__(k)
             resEquipo['haGanado'] = self.Equipos[l]['haGanado']
             resEquipo['esLocal'] = l == 'Local'
             resEquipo['yo-estads'] = self.Equipos[l]['estads']
             resEquipo['otro-estads'] = self.Equipos[OtherTeam(l)]['estads']
-            resEquipo['rival'] = self.Equipos[OtherTeam(l)]['Nombre']
-            resEquipo['cod-rival'] = self.CodigosCalendario[OtherTeam(l)]
+
             resEquipo['diferencia'] = self.Equipos[l]['Puntos'] - self.Equipos[OtherTeam(l)]['Puntos']
             resEquipo['yo-estads']['defAro'] = 100.0 / (1 + (resEquipo['otro-estads']['R-O'] / resEquipo['yo-estads']['R-D']))
+            resEquipo['yo-estads']['TC-I'] = resEquipo['yo-estads']['T2-I'] + resEquipo['yo-estads']['T3-I']
+            resEquipo['yo-estads']['TC-C'] = resEquipo['yo-estads']['T2-C'] + resEquipo['yo-estads']['T3-C']
+            resEquipo['yo-estads']['TC%'] = 100.0 * resEquipo['yo-estads']['TC-C'] / resEquipo['yo-estads']['TC-I']
+
+
             #TODO: Calculo posesiones, ...
             result.append(resEquipo)
 
