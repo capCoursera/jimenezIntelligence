@@ -16,3 +16,5 @@ build/
 data
 dist/
 *.egg-info/
+metastore_db
+dask-worker-space
