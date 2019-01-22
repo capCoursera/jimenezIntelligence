@@ -1,5 +1,7 @@
 from babel.numbers import decimal
 
+from Utils.Misc import BadParameters
+
 MAXIMOextranjeros = 2
 MINIMOnacionales = 4
 
@@ -60,3 +62,12 @@ def solucion2clave(clave, sol, charsep="#"):
     valores = [sol[k] for k in CLAVESOL]
 
     return clave + "#" + (formatoTotal % tuple(valores))
+
+
+def OtherTeam(team):
+    if team == 'Local':
+        return 'Visitante'
+    elif team == 'Visitante':
+        return 'Local'
+    else:
+        raise BadParameters("OtherTeam: '%s' provided. It only accept 'Visitante' or 'Local'" % team)

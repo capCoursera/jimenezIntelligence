@@ -13,8 +13,8 @@ from bs4 import Tag
 from Utils.Misc import BadParameters, BadString, ExtractREGroups
 from Utils.Web import DescargaPagina, ExtraeGetParams
 
-from .SMconstants import (BONUSVICTORIA, bool2esp, haGanado2esp, local2esp,
-                          titular2esp)
+from .SMconstants import (BONUSVICTORIA, OtherTeam, bool2esp, haGanado2esp,
+                          local2esp, titular2esp)
 
 templateURLficha = "http://www.acb.com/fichas/%s%i%03i.php"
 reJornada = r".*J\s*(\d+)\s*"
@@ -477,12 +477,3 @@ def GeneraURLpartido(link):
     CheckParameters(liurlcomps)
     return templateURLficha % (liurlcomps['cod_competicion'], int(liurlcomps['cod_edicion']),
                                int(liurlcomps['partido']))
-
-
-def OtherTeam(team):
-    if team == 'Local':
-        return 'Visitante'
-    elif team == 'Visitante':
-        return 'Local'
-    else:
-        raise BadParameters("OtherTeam: '%s' provided. It only accept 'Visitante' or 'Local'" % team)

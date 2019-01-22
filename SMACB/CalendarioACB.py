@@ -5,9 +5,11 @@ from time import gmtime, strptime
 
 import bs4
 
-from SMACB.PartidoACB import GeneraURLpartido
 from Utils.Misc import CompareBagsOfWords, PARSERfechaC
 from Utils.Web import ComposeURL, DescargaPagina, ExtraeGetParams, MergeURL
+
+from .PartidoACB import GeneraURLpartido
+from .SMconstants import OtherTeam
 
 URL_BASE = "http://www.acb.com"
 
@@ -277,6 +279,33 @@ class CalendarioACB(object):
     def nombresJornada(self):
         result = [self.Jornadas[x]['nombre'].replace('JORNADA ', 'J ').replace(" P.", "").replace(",", "")
                   for x in self.Jornadas]
+
+        return result
+
+    def siguientesPartidos(self):
+        """
+        Devuelve un dict de listas con los partidos pendientes de cada equipo.
+        :return:
+        """
+        LV = ['Local', 'Visitante']
+        result = defaultdict(list)
+        for j in self.Jornadas:
+            if 'pendientes' not in self.Jornadas[j] or not self.Jornadas[j]['pendientes']:
+                continue
+
+            for p in self.Jornadas[j]['pendientes']:
+                e2l = dict(zip(p['equipos'], LV))
+                l2e = dict(zip(LV, p['equipos']))
+
+                for e in p['equipos']:
+                    codigo = self.equipo2codigo[e]
+                    esLocal = (e2l[e] == 'Local')
+                    rival = l2e[OtherTeam(e2l[e])]
+                    codRival = self.equipo2codigo[rival]
+
+                    partido = {'nombre': e, 'codigo': codigo, 'jornada': p['jornada'], 'fecha': p['fecha'],
+                               'esLocal': esLocal, 'rival': rival, 'codRival': codRival}
+                    result[codigo].append(partido)
 
         return result
 
