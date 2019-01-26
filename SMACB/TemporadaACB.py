@@ -452,7 +452,7 @@ class TemporadaACB(object):
 
     def extraePartidosPorEquipo(self):
         result = defaultdict(list)
-        for e in chain.from_iterable([self.Partidos[p].clasifPartido() for p in self.Partidos]):
+        for e in chain.from_iterable([self.Partidos[p].estadsPartido() for p in self.Partidos]):
             result[e['codigo']].append(e)
 
         return result

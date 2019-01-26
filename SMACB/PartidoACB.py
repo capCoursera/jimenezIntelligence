@@ -12,8 +12,7 @@ from bs4 import Tag
 
 from Utils.Misc import BadParameters, BadString, ExtractREGroups
 from Utils.Web import DescargaPagina, ExtraeGetParams
-
-from .SMconstants import (BONUSVICTORIA, OtherTeam, bool2esp, haGanado2esp,
+from .SMconstants import (BONUSVICTORIA, OtherTeam, bool2esp, haGanado2esp, POSSTLRATIO,
                           local2esp, titular2esp)
 
 templateURLficha = "http://www.acb.com/fichas/%s%i%03i.php"
@@ -403,7 +402,7 @@ class PartidoACB(object):
 
         return (dfResult)
 
-    def clasifPartido(self):
+    def estadsPartido(self):
         """
         De cada partido extrae los datos de cada contendiente y los del rival. Creado para el dossier
         (sacar la clasificaci�n)
@@ -429,9 +428,9 @@ class PartidoACB(object):
             resEquipo['diferencia'] = self.Equipos[l]['Puntos'] - self.Equipos[OtherTeam(l)]['Puntos']
             resEquipo['yo-estads']['Prec'] = self.Equipos[OtherTeam(l)]['Puntos']
             resEquipo['yo-estads']['defAro'] = 100.0 / (
-                        1 + (resEquipo['otro-estads']['R-O'] / resEquipo['yo-estads']['R-D']))
+                    1 + (resEquipo['otro-estads']['R-O'] / resEquipo['yo-estads']['R-D']))
             resEquipo['yo-estads']['ataAro'] = 100.0 / (
-                        1 + (resEquipo['otro-estads']['R-D'] / resEquipo['yo-estads']['R-O']))
+                    1 + (resEquipo['otro-estads']['R-D'] / resEquipo['yo-estads']['R-O']))
 
             resEquipo['yo-estads']['TC-I'] = resEquipo['yo-estads']['T2-I'] + resEquipo['yo-estads']['T3-I']
             resEquipo['yo-estads']['TC-C'] = resEquipo['yo-estads']['T2-C'] + resEquipo['yo-estads']['T3-C']
@@ -442,6 +441,13 @@ class PartidoACB(object):
 
             resEquipo['yo-estads']['P2%'] = 100.0 * 2 * resEquipo['yo-estads']['T2-C'] / resEquipo['yo-estads']['P']
             resEquipo['yo-estads']['P3%'] = 100.0 * 3 * resEquipo['yo-estads']['T3-C'] / resEquipo['yo-estads']['P']
+
+            resEquipo['yo-estads']['Poss'] = (
+                    resEquipo['yo-estads']['TC-I'] + (POSSTLRATIO * resEquipo['yo-estads']['T1-I']) +
+                    resEquipo['yo-estads']['BP'] - resEquipo['yo-estads']['R-O'])
+            resEquipo['yo-estads']['OER'] = resEquipo['yo-estads']['P'] / resEquipo['yo-estads']['Poss']
+            resEquipo['yo-estads']['OEReff'] = resEquipo['yo-estads']['P'] / (
+                        resEquipo['yo-estads']['Poss'] - resEquipo['yo-estads']['BP'])
 
             # TODO: Calculo posesiones, ...
             result.append(resEquipo)
