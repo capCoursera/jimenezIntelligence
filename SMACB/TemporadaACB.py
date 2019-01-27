@@ -13,6 +13,7 @@ from statistics import mean, median, stdev
 from sys import setrecursionlimit
 from time import gmtime, strftime
 
+import numpy as np
 import pandas as pd
 from babel.numbers import decimal
 
@@ -460,9 +461,10 @@ class TemporadaACB(object):
     def obtenClasificacion(self):
         INTKEYS = ['Segs', 'P', 'T2-C', 'T2-I', 'T3-C', 'T3-I', 'T1-C', 'T1-I', 'REB-T', 'R-D', 'R-O',
                    'A', 'BR', 'BP', 'TAP-F', 'TAP-C', 'FP-F', 'FP-C', 'V', 'TC-I', 'TC-C', 'Prec']
-        FLOKEYS = ['T2%', 'T3%', 'T1%', 'defAro', 'TC%', 'P2%', 'P3%', 'ataAro']
-        entrada = {'J': 0, 'V': 0, 'D': 0, 'ratio': 0.0, 'F': 0, 'C': 0, 'prorrogas': 0, 'means': dict(),
-                   'stds': dict(), 'medians': dict()}
+        FLOKEYS = ['T2%', 'T3%', 'T1%', 'defAro', 'TC%', 'P2%', 'P3%', 'ataAro', 'Poss', 'OER', 'OEReff']
+        entrada = {'partidos': {'J': 0, 'V': 0, 'D': 0, 'ratio': 0.0, 'F': 0, 'C': 0, 'dif': 0, 'prorrogas': 0},
+                   'means': dict(),
+                   'stds': dict(), 'medians': dict(), 'merged': dict()}
         el2cf = {True: 'casa', False: 'fuera'}
         hg2vd = {True: 'V', False: 'D'}
 
@@ -480,12 +482,15 @@ class TemporadaACB(object):
 
                 for loc in locs:
                     result[e]['Nombre'] = p['nombre']
-                    result[e][loc]['J'] += 1
-                    result[e][loc][hg2vd[p['haGanado']]] += 1
-                    result[e][loc]['ratio'] = 100.0 * result[e][loc]['V'] / result[e][loc]['J']
-                    result[e][loc]['F'] += p['yo-estads']['P']
-                    result[e][loc]['C'] += p['otro-estads']['P']
-                    result[e][loc]['prorrogas'] += p['prorrogas']
+                    result[e][loc]['partidos']['J'] += 1
+                    result[e][loc]['partidos'][hg2vd[p['haGanado']]] += 1
+                    result[e][loc]['partidos']['ratio'] = 100.0 * result[e][loc]['partidos']['V'] / \
+                                                          result[e][loc]['partidos']['J']
+                    result[e][loc]['partidos']['F'] += p['yo-estads']['P']
+                    result[e][loc]['partidos']['C'] += p['otro-estads']['P']
+                    result[e][loc]['partidos']['dif'] = (
+                            result[e][loc]['partidos']['F'] - result[e][loc]['partidos']['C'])
+                    result[e][loc]['partidos']['prorrogas'] += p['prorrogas']
 
             for k in INTKEYS + FLOKEYS:
                 obs = [p['yo-estads'][k] for p in ps]
@@ -493,7 +498,8 @@ class TemporadaACB(object):
                 result[e]['total']['means'][k] = mean(obs)
                 result[e]['total']['stds'][k] = stdev(obs)
                 result[e]['total']['medians'][k] = median(obs)
-
+                result[e]['total']['merged'][k] = (
+                    result[e]['total']['means'][k], result[e]['total']['stds'][k], result[e]['total']['medians'][k])
             for cf in [True, False]:
                 loc = el2cf[cf]
 
@@ -503,6 +509,8 @@ class TemporadaACB(object):
                     result[e][loc]['means'][k] = mean(obs)
                     result[e][loc]['stds'][k] = stdev(obs)
                     result[e][loc]['medians'][k] = median(obs)
+                    result[e][loc]['merged'][k] = (
+                        result[e][loc]['means'][k], result[e][loc]['stds'][k], result[e][loc]['medians'][k])
 
         return result
 
@@ -577,5 +585,62 @@ def calculaVars(temporada, clave, useStd=True, filtroFechas=None):
                 result[comb]["-".join([comb, clZ, clave, 'mean'])] - result[comb]["-".join([comb, clZ, clave, 'std'])])
         result[comb]["-".join([comb, clave, (clZ.lower() + "Max")])] = (
                 result[comb]["-".join([comb, clZ, clave, 'mean'])] + result[comb]["-".join([comb, clZ, clave, 'std'])])
+
+    return result
+
+
+def datosClas2DF(datos, deslocs=['total']):
+    """
+
+    :param datos: resultado de           temporada.obtenClasificacion()
+    :param deslocs: uno o más de ['total','casa','fuera']
+    :return:
+    """
+
+    def getOrderPos(c):
+        TARGETPOS = 2  # 0 media, 1 std, 2 mediana
+        colName = c.name
+
+        if colName[1] == 'partidos':
+            return c
+
+        print(c)
+        npos = (np.argsort(-np.array(c.map(lambda x: x[TARGETPOS]))))
+        print(npos)
+
+        npos1 = map(lambda x: 1 + x[1], sorted(list(zip(npos, range(len(c))))))
+        print(npos1)
+
+        result = pd.Series(map(lambda x: tuple(list(x[0]) + [x[1]]), list(zip(c, npos1))), index=c.index)
+
+        return result
+
+    resultDFs = list()
+
+    desdatos = ['partidos', 'merged']
+
+    for e in datos:  # equipo
+        nombre = datos[e]['Nombre']
+        dfsEq = list()
+
+        for l in deslocs:
+            datosEq = datos[e][l]
+
+            for d in desdatos:
+                dictDatos = {nombre: datosEq[d]}
+                dfDatos = pd.DataFrame.from_dict(dictDatos, orient='index')
+
+                catsCol = [[l], [d], list(dfDatos.columns)]
+
+                colMIDX = pd.MultiIndex.from_product(catsCol)
+                dfDatosIDX = dfDatos.set_axis(colMIDX, axis=1, inplace=False)
+                dfsEq.append(dfDatosIDX)
+
+        finalDF = pd.concat(dfsEq, axis=1)
+        resultDFs.append(finalDF)
+
+    result = pd.concat(resultDFs).sort_values(
+        by=[('total', 'partidos', 'V'), ('total', 'partidos', 'D'), ('total', 'partidos', 'dif')],
+        ascending=[False, True, False]).apply(getOrderPos, axis=0)
 
     return result

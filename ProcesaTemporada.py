@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from collections import defaultdict
-from statistics import mean, median, stdev
-from time import gmtime, mktime, strftime, time
+from time import strftime
 
 from configargparse import ArgumentParser
-from pandas import DataFrame, ExcelWriter
 
-from SMACB.ManageSMDataframes import (CATMERCADOFINAL, COLSPREC,
-                                      calculaDFcategACB, calculaDFconVars,
-                                      calculaDFprecedentes)
-from SMACB.PartidoACB import PartidoACB
-from SMACB.SMconstants import MINPRECIO, POSICIONES, PRECIOpunto
 from SMACB.SuperManager import SuperManagerACB
-from SMACB.TemporadaACB import TemporadaACB, calculaVars, calculaZ
-from Utils.Misc import FORMATOtimestamp, SubSet
+from Utils.Misc import FORMATOtimestamp
 
 if __name__ == '__main__':
     parser = ArgumentParser()

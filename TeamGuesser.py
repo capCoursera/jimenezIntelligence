@@ -6,8 +6,8 @@ import csv
 import logging
 from collections import defaultdict
 from itertools import chain, product
-from sys import getsizeof
 from os.path import join
+from sys import getsizeof
 from time import strftime, time
 
 import joblib
@@ -22,8 +22,8 @@ from SMACB.SMconstants import CUPOS, POSICIONES, SEQCLAVES, solucion2clave
 from SMACB.SuperManager import ResultadosJornadas, SuperManagerACB
 from SMACB.TemporadaACB import TemporadaACB
 from Utils.CombinacionesConCupos import GeneraCombinaciones
-from Utils.Misc import FORMATOtimestamp, deepDict, deepDictSet
 from Utils.combinatorics import n_choose_m, prod
+from Utils.Misc import FORMATOtimestamp, deepDict, deepDictSet
 
 NJOBS = 2
 MEMWORKER = "2GB"

@@ -12,8 +12,9 @@ from bs4 import Tag
 
 from Utils.Misc import BadParameters, BadString, ExtractREGroups
 from Utils.Web import DescargaPagina, ExtraeGetParams
-from .SMconstants import (BONUSVICTORIA, OtherTeam, bool2esp, haGanado2esp, POSSTLRATIO,
-                          local2esp, titular2esp)
+
+from .SMconstants import (BONUSVICTORIA, POSSTLRATIO, OtherTeam, bool2esp,
+                          haGanado2esp, local2esp, titular2esp)
 
 templateURLficha = "http://www.acb.com/fichas/%s%i%03i.php"
 reJornada = r".*J\s*(\d+)\s*"
