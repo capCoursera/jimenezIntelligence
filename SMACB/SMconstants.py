@@ -3,6 +3,7 @@ from babel.numbers import decimal
 from Utils.Misc import BadParameters
 
 POSSTLRATIO = 0.44
+PARTIDOSTENDENCIA = 5
 
 MAXIMOextranjeros = 2
 MINIMOnacionales = 4

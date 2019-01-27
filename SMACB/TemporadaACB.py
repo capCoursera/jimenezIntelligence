@@ -19,7 +19,8 @@ from babel.numbers import decimal
 
 from SMACB.CalendarioACB import CalendarioACB, calendario_URLBASE
 from SMACB.PartidoACB import PartidoACB
-from SMACB.SMconstants import LISTACOMPOS, calculaValSuperManager
+from SMACB.SMconstants import (LISTACOMPOS, PARTIDOSTENDENCIA,
+                               calculaValSuperManager)
 from Utils.Misc import FORMATOfecha, FORMATOtimestamp, Seg2Tiempo
 from Utils.Pandas import combinaPDindexes
 
@@ -476,6 +477,7 @@ class TemporadaACB(object):
             result[e]['total'] = deepcopy(entrada)
             result[e]['casa'] = deepcopy(entrada)
             result[e]['fuera'] = deepcopy(entrada)
+            result[e]['total']['partidos']['ultParts'] = tendenciaEquipo(ps, PARTIDOSTENDENCIA)
 
             for p in ps:
                 locs = ('total', el2cf[p['esLocal']])
@@ -500,11 +502,14 @@ class TemporadaACB(object):
                 result[e]['total']['medians'][k] = median(obs)
                 result[e]['total']['merged'][k] = (
                     result[e]['total']['means'][k], result[e]['total']['stds'][k], result[e]['total']['medians'][k])
+
             for cf in [True, False]:
+                parts = [p for p in ps if p['esLocal'] == cf]
                 loc = el2cf[cf]
+                result[e][loc]['partidos']['ultParts'] = tendenciaEquipo(parts, PARTIDOSTENDENCIA)
 
                 for k in INTKEYS + FLOKEYS:
-                    obs = [p['yo-estads'][k] for p in ps if p['esLocal'] == cf]
+                    obs = [p['yo-estads'][k] for p in parts]
 
                     result[e][loc]['means'][k] = mean(obs)
                     result[e][loc]['stds'][k] = stdev(obs)
@@ -642,5 +647,16 @@ def datosClas2DF(datos, deslocs=['total']):
     result = pd.concat(resultDFs).sort_values(
         by=[('total', 'partidos', 'V'), ('total', 'partidos', 'D'), ('total', 'partidos', 'dif')],
         ascending=[False, True, False]).apply(getOrderPos, axis=0)
+
+    return result
+
+
+def tendenciaEquipo(partidos, numPartidos=5):
+    lv2k = {True: {True: 'v', False: 'd'}, False: {True: 'V', False: 'D'}}
+
+    datosE = [(p['esLocal'], p['haGanado']) for p in sorted(partidos, key=lambda x: x['FechaHora'])]
+    tendE = list(map(lambda x: lv2k[x[0]][x[1]], datosE))
+
+    result = "".join(tendE[-numPartidos:])
 
     return result
