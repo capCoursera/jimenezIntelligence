@@ -276,7 +276,7 @@ class MercadoPageContent():
                         img_link = data.img['src']
                         result['foto'] = img_link
                         result['nombre'] = data.img['title']
-                        auxre = re.search(r'J(.{3})LACB([0-9]{2})\.jpg', img_link)
+                        auxre = re.search(r'J(.{3})LACB([0-9]{2})\.(jpg|JPG)', img_link)
                         if auxre:
                             result['codJugador'] = auxre.group(1)
                             result['temp'] = auxre.group(2)
