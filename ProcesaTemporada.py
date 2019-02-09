@@ -18,6 +18,9 @@ if __name__ == '__main__':
     parser.add('-i', dest='infile', type=str, env_var='SM_INFILE', required=True)
     parser.add('-t', dest='temporada', type=str, env_var='SM_TEMPORADA', required=True)
 
+    parser.add('-e', dest='equipos', type=str, action="append")
+    parser.add('-l', '--lista-codigos', dest='listaCodigos', action="store_true", default=False)
+
     args = parser.parse_args()
 
     sm = SuperManagerACB()
