@@ -28,8 +28,8 @@ from SMACB.SMconstants import CLAVESCSV, SEQCLAVES, solucion2clave
 from SMACB.SuperManager import ResultadosJornadas, SuperManagerACB
 from SMACB.TemporadaACB import TemporadaACB
 from Utils.CombinacionesConCupos import GeneraCombinaciones
-from Utils.combinatorics import n_choose_m, prod
 from Utils.Misc import FORMATOtimestamp, creaPath, deepDict, deepDictSet
+from Utils.combinatorics import n_choose_m, prod
 from Utils.pysize import get_size
 
 NJOBS = 2
@@ -59,7 +59,6 @@ indexGroups = [[0, 1, 2, 3], [4, 5], [6, 7, 8]]
 # indexGroups = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
 
 LOCATIONCACHE = '/home/calba/devel/SuperManager/guesser'
-
 
 clavesParaNomFich = "+".join(SEQCLAVES)
 
@@ -429,7 +428,7 @@ if __name__ == '__main__':
     planesAcorrer = []
     solucionesConocidas = []
     sociosReales.sort()
-    for i, socio in product(range(len(groupedCombsKeys)), sociosReales):
+    for socio, i in product(sociosReales, range(len(groupedCombsKeys))):
         plan = groupedCombsKeys[i]
 
         planTotal = {'seqnum': i,

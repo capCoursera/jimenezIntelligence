@@ -67,8 +67,6 @@ def procesaArgumentos():
     parser.add('-t', dest='temporada', type=str, env_var='SM_TEMPORADA', required=True)
     parser.add('-j', dest='jornada', type=int, required=True)
 
-    parser.add('-l', '--lista-socios', dest='listaSocios', action="store_true", default=False)
-
     parser.add("-o", "--output-dir", dest="outputdir", type=str, default=LOCATIONCACHE)
 
     parser.add('--nproc', dest='nproc', type=int, default=NJOBS)
@@ -78,9 +76,6 @@ def procesaArgumentos():
     parser.add('-v', dest='verbose', action="count", env_var='SM_VERBOSE', required=False, default=0)
     parser.add('-d', dest='debug', action="store_true", env_var='SM_DEBUG', required=False, default=False)
     parser.add('--logdir', dest='logdir', type=str, env_var='SM_LOGDIR', required=False)
-
-    # args = vars(parser.parse_args())
-    # return Namespace(**args)
 
     return parser.parse_args()
 
@@ -338,6 +333,7 @@ if __name__ == '__main__':
     configParallel = {'verbose': 100}
     configParallel['n_jobs'] = args.nproc
     configParallel['prefer'] = args.joblibmode
+    configParallel['max_nbytes'] = None
 
     result = joblib.Parallel(**configParallel)(
         joblib.delayed(calculaCuentaResultados)(**plan) for plan in planesAcorrer)
