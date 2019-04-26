@@ -7,7 +7,8 @@ from time import gmtime
 
 import mechanicalsoup
 import pandas as pd
-from babel.numbers import decimal
+import re
+from babel.numbers import decimal, parse_decimal
 from bs4 import BeautifulSoup
 from mechanicalsoup import LinkNotFoundError
 
@@ -15,6 +16,7 @@ from .ClasifData import ClasifData, manipulaSocio
 from .ManageSMDataframes import datosPosMerc, datosProxPartidoMerc
 from .MercadoPage import MercadoPageContent
 from .SMconstants import bool2esp
+from Utils.Web import MergeURL
 
 URL_SUPERMANAGER = "http://supermanager.acb.com/index/identificar"
 
@@ -129,6 +131,29 @@ class SuperManagerACB(object):
                 raise NoPrivateLeaguesError("El usuario {} no participa en la liga privada {}", config.user, self.ligaID)
 
         browser.follow_link(targLeague['Ampliar'])
+
+    def getIntoMyTeams(self, browser, config):
+        lplink = browser.find_link(link_text='ver equipos')
+        browser.follow_link(lplink)
+        here = browser.get_url()
+
+        listaEquipos = procesaMisEquipos(browser.get_current_page())
+        # print(browser.get_current_page())
+
+        for eq in listaEquipos['Equipos'].values():
+
+            eqLink = MergeURL(here,eq['link'])
+            browser.open(eqLink)
+            eqData = procesaEquipo(browser.get_current_page())
+
+            browser.open(here)
+
+            print("->",eqLink)
+            print("<-",browser.get_url())
+            print(browser.get_current_page())
+
+        return listaEquipos
+
 
     def getJornada(self, idJornada, browser):
         pageForm = browser.get_current_page().find("form", {"id": 'FormClasificacion'})
@@ -565,3 +590,165 @@ def getMercado(browser, datosACB=None):
     browser.follow_link("mercado")
     mercadoData = MercadoPageContent({'source': browser.get_url(), 'data': browser.get_current_page()}, datosACB)
     return mercadoData
+
+
+def procesaMisEquipos(content):
+    REultJ = r'Jornada\s(?P<ultj>\d+)'
+    REurlEq = r'/equipos/ver/id/(?P<id>\d+)'
+    result = { 'Equipos': {}}
+
+    def parseaEntrada(cadena):
+        result = dict()
+        REentrada= r'\s*(?P<valor>[\d,.]+)\s+\(((?P<posic>\d+|).)|-\)\s*'
+
+        mEntrada = re.match(REentrada,cadena)
+        if mEntrada:
+            valor = parse_decimal(mEntrada.group('valor'), locale='de')
+            posic = int(mEntrada.group('posic')) if mEntrada.group('posic') else "TBD"
+            return {'valor': valor, 'posic':posic}
+        else:
+            raise ValueError("Cadena '%s' no casa RE '%s'." % (cadena,REentrada))
+
+    encab = content.find("table", {"class": "topclasificaciones"})
+
+    textUltJ = encab.find("th", {"class": "jornadas"}).text
+    mUJ = re.match(REultJ,textUltJ)
+    result['UJ'] = mUJ.group('ultj')
+
+
+    tablaEquipos  = content.find("table", {"class": "clasificacionequipos"})
+
+    for eq in tablaEquipos.find_all("tr"):
+        eqData = dict()
+        for cell in eq.find_all("td"):
+            cell_class = cell.get('class')[0]
+            if cell_class == "icono":
+                eqData['Atencion'] = True if (cell.find('img',{'src':'/images/web/mercado/ico-alerta.png'})) else False
+                #TODO: ¿Qué pasa cuando la cosa está bien?
+                pass
+            elif cell_class == "equipo":
+                eqData['nombre'] = cell.text
+                destLink = cell.find_all('a')[0].get('href')
+                mEqId = re.match(REurlEq,destLink)
+                eqData['id']= mEqId.group('id')
+                eqData['link'] = destLink
+
+            if cell_class == "jornadas":
+                eqData[cell_class] = parseaEntrada(cell.text)
+            elif cell_class == "general":
+                eqData[cell_class] = parseaEntrada(cell.text)
+            elif cell_class == "broker":
+                eqData[cell_class] = parseaEntrada(cell.text)
+
+        result['Equipos'][eqData['id']] = eqData
+
+    return result
+    
+    forms = content.find_all("form", {"name": "listaprivadas"})
+    result = {}
+    for formleague in forms:
+        for privleague in formleague.find_all("tr"):
+            leaguedata = {}
+            inpleague = privleague.find("input", {'type': 'radio'})
+            idleague = inpleague['value']
+            leaguedata['id'] = idleague
+            leaguedata['nombre'] = privleague.find("td", {'class': 'nombre'}).get_text()
+            for lealink in privleague.find_all("a"):
+                leaguedata[lealink.get_text()] = lealink['href']
+            result[str(idleague)] = leaguedata
+
+    return result
+
+
+def procesaEquipo(content):
+    result = dict()
+    #print(content)
+
+    fSect = content.find("section",{"class":"interior"})
+    for mp in fSect.find_all("div",{"class":"mispuntos"}):
+        haycaja=mp.find("span",{"id":"presupuesto"})
+        if haycaja:
+            result['caja'] = parse_decimal(haycaja.text,locale="de")
+        else:
+            REpuntos = r'.*\s(?P<ptos>[\d.,]+)\s*'
+            mPuntos= re.match(REpuntos,mp.text)
+            result['ptos'] = parse_decimal(mPuntos.group('ptos'),locale="de")
+
+#    for tJugs in fSect.find_all("table",{"class":"misjugadores"}):
+    for tJugs in fSect.find_all("div",{"class":"contiene-jugadores"}):
+        print("---")
+        print(tJugs)
+        for jug in tJugs.find_all("tr"):
+            print("   ++++", jug)
+
+        # print(tJugs)
+
+
+    #print(fSect)
+    exit(1)
+    return None
+    REultJ = r'Jornada\s(?P<ultj>\d+)'
+    REurlEq = r'/equipos/ver/id/(?P<id>\d+)'
+    result = { 'Equipos': {}}
+
+    def parseaEntrada(cadena):
+        result = dict()
+        REentrada= r'\s*(?P<valor>[\d,.]+)\s+\((?P<posic>\d+).\)\s*'
+
+        mEntrada = re.match(REentrada,cadena)
+        if mEntrada:
+            valor = parse_decimal(mEntrada.group('valor'), locale='de')
+            posic = int(mEntrada.group('posic'))
+            return {'valor': valor, 'posic':posic}
+        else:
+            raise ValueError("Cadena '%s' no casa RE '%s'." % (cadena,REentrada))
+
+    encab = content.find("table", {"class": "topclasificaciones"})
+
+    textUltJ = encab.find("th", {"class": "jornadas"}).text
+    mUJ = re.match(REultJ,textUltJ)
+    result['UJ'] = mUJ.group('ultj')
+
+
+    tablaEquipos  = content.find("table", {"class": "clasificacionequipos"})
+
+    for eq in tablaEquipos.find_all("tr"):
+        eqData = dict()
+        for cell in eq.find_all("td"):
+            cell_class = cell.get('class')[0]
+            if cell_class == "icono":
+                eqData['Atencion'] = True if (cell.find('img',{'src':'/images/web/mercado/ico-alerta.png'})) else False
+                #TODO: ¿Qué pasa cuando la cosa está bien?
+                pass
+            elif cell_class == "equipo":
+                eqData['nombre'] = cell.text
+                destLink = cell.find_all('a')[0].get('href')
+                mEqId = re.match(REurlEq,destLink)
+                eqData['id']= mEqId.group('id')
+                eqData['link'] = destLink
+
+            if cell_class == "jornadas":
+                eqData[cell_class] = parseaEntrada(cell.text)
+            elif cell_class == "general":
+                eqData[cell_class] = parseaEntrada(cell.text)
+            elif cell_class == "broker":
+                eqData[cell_class] = parseaEntrada(cell.text)
+
+        result['Equipos'][eqData['id']] = eqData
+
+    return result
+
+    forms = content.find_all("form", {"name": "listaprivadas"})
+    result = {}
+    for formleague in forms:
+        for privleague in formleague.find_all("tr"):
+            leaguedata = {}
+            inpleague = privleague.find("input", {'type': 'radio'})
+            idleague = inpleague['value']
+            leaguedata['id'] = idleague
+            leaguedata['nombre'] = privleague.find("td", {'class': 'nombre'}).get_text()
+            for lealink in privleague.find_all("a"):
+                leaguedata[lealink.get_text()] = lealink['href']
+            result[str(idleague)] = leaguedata
+
+    return result
