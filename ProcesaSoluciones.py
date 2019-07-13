@@ -187,16 +187,20 @@ if __name__ == '__main__':
 
     for socio in solucionesEncontradas:
         solsSocio = []
+        contSolsSocio = 1
         for i in range(len(solucionesEncontradas[socio])):
             combs = [gruposAencontrar['entradas'][x] for x in solucionesEncontradas[socio][i]['grupos']]
             prodLen = prod(map(len, combs))
+            combProdSTR = " x ".join(map(str,sorted(combs)))
+            print(socio,  contSolsSocio,i, solucionesEncontradas[socio][i]['contador'], prodLen,
+                  sorted(solucionesEncontradas[socio][i]['grupos']),combProdSTR)
             for c in product(*combs):
                 jugset = sorted(c[0].split("-") + c[1].split("-") + c[2].split("-"))
                 solsSocio.append(jugset)
                 solucionesEncontradas[socio][i]['jugset'] = jugset
 
-                print(i, socio, solucionesEncontradas[socio][i]['contador'], prodLen,
-                      sorted(solucionesEncontradas[socio][i]['grupos']), sorted(jugset))
+                #print(contSolsSocio,i, socio, solucionesEncontradas[socio][i]['contador'], prodLen,                      sorted(solucionesEncontradas[socio][i]['grupos']), sorted(jugset))
+                contSolsSocio += 1
         # print(socio, solsSocio)
 
     # solucionesEncontradas = {'Pabmm': [['105', '1L5', '1LU', '1N9', '52J', '57V', '586', 'A4B', 'BK4', 'FOX', 'Y3V'],
