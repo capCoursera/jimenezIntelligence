@@ -521,7 +521,7 @@ def datosTablaLiga(tempData: TemporadaACB):
     datosTabla = []
     cabFila = [Paragraph('<b>Casa/Fuera</b>', style=estCelda)] + [
         Paragraph('<b>' + list(clasif[pos]['abrevsEq'])[0] + '</b>', style=estCelda) for pos, _ in seqIDs] + [
-                  Paragraph('<b>Como local</b>', style=estCelda)]
+                  Paragraph('<b>Local</b>', style=estCelda)]
     datosTabla.append(cabFila)
     for pos, idLocal in seqIDs:
         fila = []
@@ -550,7 +550,7 @@ def datosTablaLiga(tempData: TemporadaACB):
         fila.append(Paragraph(auxCalculaBalanceStr(clasif[pos]['CasaFuera']['Local']), style=estCelda))
         datosTabla.append(fila)
 
-    filaBalFuera = [Paragraph('<b>Como visitante</b>', style=estCelda)]
+    filaBalFuera = [Paragraph('<b>Visitante</b>', style=estCelda)]
     for pos, idLocal in seqIDs:
         filaBalFuera.append(Paragraph(auxCalculaBalanceStr(clasif[pos]['CasaFuera']['Visitante']), style=estCelda))
     filaBalFuera.append([])
@@ -804,7 +804,8 @@ def tablaLiga(tempData: TemporadaACB):
                          ("BACKGROUND", (1, -1), (-2, -1), colors.lightgrey)])
     datosAux = datosTablaLiga(tempData)
     alturas = [20] + [28] * (len(datosAux) - 2) + [20]
-    anchos = [58] + [38] * (len(datosAux) - 2) + [40]
+    anchos = [70] + [38] * (len(datosAux) - 2) + [30]
+
     for i in range(1, len(datosAux) - 1):
         tStyle.add("BACKGROUND", (i, i), (i, i), colors.lightgrey)
 
